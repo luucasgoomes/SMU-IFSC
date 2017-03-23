@@ -170,7 +170,7 @@ peerConn.onicecandidate = function(event) {
 
 if (isInitiator) {
   console.log('Creating Data Channel');
-  dataChannel = peerConn.createDataChannel('audio');
+  dataChannel = peerConn.createDataChannel('photos');
   onDataChannelCreated(dataChannel);
 
   console.log('Creating an offer');

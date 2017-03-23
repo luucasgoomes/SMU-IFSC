@@ -13,6 +13,7 @@ var app = http.createServer(function(req, res) {
 var io = socketIO.listen(app);
 io.sockets.on('connection', function(socket) {
 
+
   // convenience function to log server messages on the client
   function log() {
     var array = ['Message from server:'];
@@ -36,14 +37,14 @@ io.sockets.on('connection', function(socket) {
       socket.join(room);
       log('Client ID ' + socket.id + ' created room ' + room);
       socket.emit('created', room, socket.id);
-    } else if (numClients <= 5) {
+    } else if (numClients === 2) {
       log('Client ID ' + socket.id + ' joined room ' + room);
-      io.sockets.in(room).emit('join', room);
+      // io.sockets.in(room).emit('join', room);
       socket.join(room);
       socket.emit('joined', room, socket.id);
       io.sockets.in(room).emit('ready', room);
       socket.broadcast.emit('ready', room);
-    } else { // max 5 clients
+    } else { // max two clients
       socket.emit('full', room);
     }
   });

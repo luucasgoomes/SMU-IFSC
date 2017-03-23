@@ -1,41 +1,47 @@
 <!DOCTYPE html>
 <html>
-
-<head>
-
-  <title>Realtime communication with WebRTC</title>
-
-  <link rel="stylesheet" href="/css/main.css" />
-
-</head>
-
-<body>
-
-  <h1>Realtime communication with WebRTC</h1>
-  <div id="urlCanvas">
-    <p id="urlText">Copie o link da sala</p>
-    <p id="url"></p>
-  </div>
-  </div id="videoCanvas">
-    <video id="camera" autoplay></video>
-    <canvas id="photo"></canvas>
-  </div>
-
-  <div id="buttons">
-    <button id="snap">Snap</button><span> then </span><button id="send">Send</button>
-    <span> or </span>
-    <button id="snapAndSend">Snap &amp; Send</button>
-  </div>
-
-  <div id="incoming">
-    <h2>Incoming photos</h2>
-    <div id="trail"></div>
-  </div>
-
-  <script src="/socket.io/socket.io.js"></script>
+ <head>
+  <meta charset="utf-8"/>
+  <script src="https://cdn.socket.io/socket.io-1.0.0.js"></script>
   <script src="js/lib/adapter.js"></script>
   <script src="js/main.js"></script>
+  <script type="application/javascript">
+    function draw() {
+      var canvas = document.getElementById('canvas');
+      if (canvas.getContext) {
+        var ctx = canvas.getContext('2d');
 
-</body>
+	ctx.font = "50px serif";
+	ctx.fillText("Synthesia", 560, 70);
 
+        ctx.fillStyle = 'rgb(200, 0, 0)';
+        ctx.fillRect(400, 200, 100, 100);
+
+        ctx.fillStyle = 'rgb(0, 0, 255)';
+        ctx.fillRect(550, 200, 100, 100);
+
+	ctx.fillStyle = 'rgb(0, 255, 0)';
+        ctx.fillRect(700, 200, 100, 100);
+	
+	ctx.fillStyle = 'rgb(230, 20, 175)';
+        ctx.fillRect(850, 200, 100, 100);
+
+	ctx.fillStyle = 'rgb(255, 255, 0)';
+        ctx.fillRect(400, 350, 100, 100);
+
+	ctx.fillStyle = 'rgb(0, 255, 204)';
+        ctx.fillRect(550, 350, 100, 100);
+
+	ctx.fillStyle = 'rgb(255, 153, 51)';
+        ctx.fillRect(700, 350, 100, 100);
+
+	ctx.fillStyle = 'rgb(255, 80, 80)';
+        ctx.fillRect(850, 350, 100, 100);
+      }
+    }
+  </script>
+ </head>
+ <body onload="draw();">
+   <canvas id="canvas" width="1200" height="650"></canvas>
+ </body>
 </html>
