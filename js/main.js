@@ -1,7 +1,15 @@
 'use strict';
 
 var context = new AudioContext();
-var configuration = null;
+
+var configuration = {
+  'iceServers': [{
+    'url': 'stun:stun.l.google.com:19302'
+  }]
+};
+
+
+
 
 // Create a random room.
 var isInitiator;
