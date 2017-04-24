@@ -1,5 +1,7 @@
 'use strict';
 
+console.log('----------------Servidor Orquestra---------------');
+
 var os = require('os');
 var nodeStatic = require('node-static');
 var http = require('http');
@@ -10,9 +12,16 @@ var app = http.createServer(function(req, res) {
   fileServer.serve(req, res);
 }).listen(8080);
 
-var io = socketIO.listen(app);
-io.sockets.on('connection', function(socket) {
+var express = require('express')
+var app2 = express()
+app2.listen(3000, function () {
+  console.log('Arquivos disponibilizados através da porta: 3000!');
+})
+app2.use(express.static('public'))
 
+var io = socketIO.listen(app);
+
+io.sockets.on('connection', function(socket) {
 
   // convenience function to log server messages on the client
   function log() {
@@ -23,28 +32,34 @@ io.sockets.on('connection', function(socket) {
 
   socket.on('message', function(message) {
     log('Client said: ', message);
+    console.log('Client said: ',message);
     // for a real app, would be room-only (not broadcast)
     socket.broadcast.emit('message', message);
+    console.log('The message above was sent to others');
   });
 
   socket.on('create or join', function(room) {
     log('Received request to create or join room ' + room);
+    console.log('Received request to create or join room ' + room);
 
     var numClients = io.sockets.sockets.length;
     log('Room ' + room + ' now has ' + numClients + ' client(s)');
+    console.log('Room ' + room + ' now has ' + numClients + ' client(s)');
 
     if (numClients === 1) {
       socket.join(room);
       log('Client ID ' + socket.id + ' created room ' + room);
+      console.log('Client ID ' + socket.id + ' created room ' + room);
       socket.emit('created', room, socket.id);
-    } else if (numClients === 2) {
+    } else if (numClients <= 5) {
       log('Client ID ' + socket.id + ' joined room ' + room);
-      // io.sockets.in(room).emit('join', room);
+      console.log('Client ID ' + socket.id + ' joined room ' + room);
+      io.sockets.in(room).emit('join', room);
       socket.join(room);
       socket.emit('joined', room, socket.id);
       io.sockets.in(room).emit('ready', room);
       socket.broadcast.emit('ready', room);
-    } else { // max two clients
+    } else { // max 5 clients
       socket.emit('full', room);
     }
   });

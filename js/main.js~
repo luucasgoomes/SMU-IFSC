@@ -1,9 +1,23 @@
 'use strict';
 
-var context = new AudioContext();
-var configuration = null;
+/****************************************************************************
+* Initial setup
+****************************************************************************/
 
-// Create a random room.
+var serverIp = '191.36.11.210';
+
+var configuration = {
+  'iceServers': [{
+    'url': 'stun:stun.l.google.com:19302'
+  }]
+};
+// {'url': 'stun:stun.services.mozilla.com'}
+
+
+var roomURL = document.getElementById('url');
+var context = new AudioContext();
+
+// Create a random room if not already present in the URL.
 var isInitiator;
 var room = window.location.hash.substring(1);
 if (!room) {
@@ -14,25 +28,22 @@ if (!room) {
 * Signaling server
 ****************************************************************************/
 
-// Connect to the signaling server
 var socket = io.connect();
 
 socket.on('ipaddr', function(ipaddr) {
   console.log('Server IP address is: ' + ipaddr);
-  // updateRoomURL(ipaddr);
+  updateRoomURL(ipaddr);
 });
 
 socket.on('created', function(room, clientId) {
   console.log('Created room', room, '- my client ID is', clientId);
   isInitiator = true;
-  //grabWebCamVideo();
 });
 
 socket.on('joined', function(room, clientId) {
   console.log('This peer has joined room', room, 'with client ID', clientId);
   isInitiator = false;
   createPeerConnection(isInitiator, configuration);
-  //grabWebCamVideo();
 });
 
 socket.on('full', function(room) {
@@ -55,8 +66,13 @@ socket.on('message', function(message) {
   signalingMessageCallback(message);
 });
 
-// Join a room
+
+/****************************************************************************
+* Begin
+****************************************************************************/
+
 socket.emit('create or join', room);
+
 if (location.hostname.match(/localhost|127\.0\.0/)) {
   socket.emit('ipaddr');
 }
@@ -68,56 +84,68 @@ function sendMessage(message) {
   console.log('Client sending message: ', message);
   socket.emit('message', message);
 }
+
+/**
+* Updates URL on the page so that users can copy&paste it to their peers.
+*/
+function updateRoomURL(ipaddr) {
+  var url;
+  if (!ipaddr) {
+    url = location.href;
+  } else {
+    url = location.protocol + '//' + ipaddr + ':8080/#' + room;
+    console.log(url);
+  }
+  roomURL.innerHTML = url;
+  // roomURL.text = url;
+}
+
 /****************************************************************************
-* User media (audio file)
+* User media 
 ****************************************************************************/
 
-/*
-function handleFileSelect(event) {
-  var file = event.target.files[0];
- 
-  if (file) {
-    if (file.type.match('audio*')) {
-      var reader = new FileReader();
- 
-        reader.onload = (function(readEvent) {
-          context.decodeAudioData(readEvent.target.result, function(buffer) {
-            // create an audio source and connect it to the file buffer
-            var source = context.createBufferSource();
-            source.buffer = buffer;
-            source.start(0);
- 
-            // connect the audio stream to the audio hardware
-            source.connect(context.destination);
- 
-            // create a destination for the remote browser
-            var remote = context.createMediaStreamDestination();
- 
-            // connect the remote destination to the source
-            source.connect(remote);
- 
-            // add the stream to the peer connection
-            pc.addStream(remote.stream);
- 
-            // create a SDP offer for the new stream
-            pc.createOffer(setLocalAndSendMessage);
-          });
-        });
- 
-      reader.readAsArrayBuffer(file);
+var mediaSource, mediaBuffer, remoteDestination, mediaDescription;
+
+function handleFileSelect(audio,op,when) {
+
+    if(op){
+        playTon (audio,when)
+    }else{
+        stopTon (audio,when)
     }
-  }
 }
 
-function gotRemoteStream(event) {
-  // create a player, we could also get a reference from a existing player in the DOM
-  var player = new Audio();
-  // attach the media stream
-  attachMediaStream(player, event.stream);
-  // start playing
-  player.play();
+var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+var source;
+
+function getAudio(audio){
+    source = audioCtx.createBufferSource();
+    var request = new XMLHttpRequest();
+    request.open('GET', 'http://'+serverIp+':3000/'+audio+'.wav', true);
+    request.responseType = 'arraybuffer';
+
+    request.onload = function() {
+    var audioData = request.response;
+
+    audioCtx.decodeAudioData(audioData, function(buffer) {
+        source.buffer = buffer;
+        source.connect(audioCtx.destination);
+        source.loop = true;
+      },
+      function(e){ console.log("Error with decoding audio data" + e.err); });
+  }
+  request.send();
 }
-*/
+
+function playTon (audio,when) {                           //start wind audio
+    getAudio(audio);    
+    source.start(when);
+}
+
+function stopTon (audio,when) {                           //stop the wind audio
+    source.stop(audioCtx.currentTime + when);
+}
+
 
 /****************************************************************************
 * WebRTC peer connection and data channel
@@ -151,7 +179,7 @@ function signalingMessageCallback(message) {
 function createPeerConnection(isInitiator, config) {
   console.log('Creating Peer connection as initiator?', isInitiator, 'config:',
               config);
-  peerConn = new RTCPeerConnection(config);
+     peerConn = new RTCPeerConnection(config);
 
 // send any ice candidates to the other peer
 peerConn.onicecandidate = function(event) {
@@ -170,7 +198,7 @@ peerConn.onicecandidate = function(event) {
 
 if (isInitiator) {
   console.log('Creating Data Channel');
-  dataChannel = peerConn.createDataChannel('photos');
+  dataChannel = peerConn.createDataChannel('audio');
   onDataChannelCreated(dataChannel);
 
   console.log('Creating an offer');
@@ -192,6 +220,9 @@ function onLocalSessionCreated(desc) {
   }, logError);
 }
 
+//var audioCtx2 = new (window.AudioContext || window.webkitAudioContext)();
+//var source2;
+
 function onDataChannelCreated(channel) {
   console.log('onDataChannelCreated:', channel);
 
@@ -199,72 +230,14 @@ function onDataChannelCreated(channel) {
     console.log('CHANNEL opened!!!');
   };
 
-  channel.onmessage = (adapter.browserDetails.browser === 'firefox') ?
-  receiveDataFirefoxFactory() : receiveDataChromeFactory();
+  channel.onmessage = function(event){
+    console.log('Received data: ' + event.data);
+	handleFileSelect(event.data,1,0);
+    handleFileSelect(event.data,0,0.5);	      	      
+  }
 }
 
-function receiveDataChromeFactory() {
-  var buf, count;
 
-  return function onmessage(event) {
-    if (typeof event.data === 'string') {
-      buf = window.buf = new Uint8ClampedArray(parseInt(event.data));
-      count = 0;
-      console.log('Expecting a total of ' + buf.byteLength + ' bytes');
-      return;
-    }
-
-    var data = new Uint8ClampedArray(event.data);
-    buf.set(data, count);
-
-    count += data.byteLength;
-    console.log('count: ' + count);
-
-    if (count === buf.byteLength) {
-// we're done: all data chunks have been received
-console.log('Done. Rendering photo.');
-renderPhoto(buf);
-}
-};
-}
-
-function receiveDataFirefoxFactory() {
-  var count, total, parts;
-
-  return function onmessage(event) {
-    if (typeof event.data === 'string') {
-      total = parseInt(event.data);
-      parts = [];
-      count = 0;
-      console.log('Expecting a total of ' + total + ' bytes');
-      return;
-    }
-
-    parts.push(event.data);
-    count += event.data.size;
-    console.log('Got ' + event.data.size + ' byte(s), ' + (total - count) +
-                ' to go.');
-
-    if (count === total) {
-      console.log('Assembling payload');
-      var buf = new Uint8ClampedArray(total);
-      var compose = function(i, pos) {
-        var reader = new FileReader();
-        reader.onload = function() {
-          buf.set(new Uint8ClampedArray(this.result), pos);
-          if (i + 1 === parts.length) {
-            console.log('Done. Rendering photo.');
-            renderPhoto(buf);
-          } else {
-            compose(i + 1, pos + this.result.byteLength);
-          }
-        };
-        reader.readAsArrayBuffer(parts[i]);
-      };
-      compose(0, 0);
-    }
-  };
-}
 
 /****************************************************************************
 * Aux functions, mostly UI-related
@@ -277,3 +250,77 @@ function randomToken() {
 function logError(err) {
   console.log(err.toString(), err);
 }
+
+/****************************************************************************
+* Button Fuctions
+****************************************************************************/
+
+$(document).ready(function () {
+
+    $("#redbox").mouseover(function(){
+        $("#redbox").attr("src", "img/mouseover_box.png");
+        handleFileSelect("do",1,0);
+        dataChannel.send("do");
+    });
+    $("#redbox").mouseout(function(){
+        $("#redbox").attr("src", "img/red_box.png");
+        handleFileSelect("do",0,0);
+    });
+
+    $("#greenbox").mouseover(function(){
+        $("#greenbox").attr("src", "img/mouseover_box.png");
+        handleFileSelect("re",1,0);
+        dataChannel.send("re");
+    });
+    $("#greenbox").mouseout(function(){
+        $("#greenbox").attr("src", "img/green_box.png");
+        handleFileSelect("re",0,0);
+    });
+
+    $("#bluebox").mouseover(function(){
+        $("#bluebox").attr("src", "img/mouseover_box.png");
+        handleFileSelect("mi",1,0);
+        dataChannel.send("mi");
+    });
+    $("#bluebox").mouseout(function(){
+        $("#bluebox").attr("src", "img/blue_box.png");
+        handleFileSelect("mi",0,0);
+    });
+
+    $("#purplebox").mouseover(function(){
+        $("#purplebox").attr("src", "img/mouseover_box.png");
+        handleFileSelect("fa",1,0);
+        dataChannel.send("fa");
+    });
+    $("#purplebox").mouseout(function(){
+        $("#purplebox").attr("src", "img/purple_box.png");
+        handleFileSelect("fa",0,0);
+    });
+
+    $("#yellowbox").mouseover(function(){
+        $("#yellowbox").attr("src", "img/mouseover_box.png");
+        handleFileSelect("sol",1,0);
+        dataChannel.send("sol");
+    });
+    $("#yellowbox").mouseout(function(){
+        $("#yellowbox").attr("src", "img/yellow_box.png");
+        handleFileSelect("sol",0,0);    
+    });
+
+    $("#blackbox").mouseover(function(){
+        $("#blackbox").attr("src", "img/mouseover_box.png");
+        handleFileSelect("la",1,0);
+        dataChannel.send("la");
+    });
+    $("#blackbox").mouseout(function(){
+        $("#blackbox").attr("src", "img/black_box.png");
+        handleFileSelect("la",0,0);
+    });
+
+});
+
+
+
+
+
+
