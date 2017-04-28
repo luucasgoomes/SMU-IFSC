@@ -4,25 +4,24 @@
 * Initial setup
 ****************************************************************************/
 
-var serverIp = '191.36.11.210';
+var serverIp = '192.168.1.207';
 
 var configuration = {
   'iceServers': [{
     'url': 'stun:stun.l.google.com:19302'
   }]
 };
-// {'url': 'stun:stun.services.mozilla.com'}
-
 
 var roomURL = document.getElementById('url');
 var context = new AudioContext();
-
-// Create a random room if not already present in the URL.
 var isInitiator;
+
 var room = window.location.hash.substring(1);
 if (!room) {
   room = window.location.hash = randomToken();
 }
+
+
 
 /****************************************************************************
 * Signaling server
@@ -57,10 +56,6 @@ socket.on('ready', function() {
   createPeerConnection(isInitiator, configuration);
 });
 
-socket.on('log', function(array) {
-  console.log.apply(console, array);
-});
-
 socket.on('message', function(message) {
   console.log('Client received message:', message);
   signalingMessageCallback(message);
@@ -71,23 +66,20 @@ socket.on('message', function(message) {
 * Begin
 ****************************************************************************/
 
+console.log('Obtendo os arquivos de áudio...');
+getAudioFiles();
+
 socket.emit('create or join', room);
 
-if (location.hostname.match(/localhost|127\.0\.0/)) {
+if (location.hostname.match('191.36.10.9')) {
   socket.emit('ipaddr');
 }
 
-/**
-* Send message to signaling server
-*/
 function sendMessage(message) {
   console.log('Client sending message: ', message);
   socket.emit('message', message);
 }
 
-/**
-* Updates URL on the page so that users can copy&paste it to their peers.
-*/
 function updateRoomURL(ipaddr) {
   var url;
   if (!ipaddr) {
@@ -97,7 +89,6 @@ function updateRoomURL(ipaddr) {
     console.log(url);
   }
   roomURL.innerHTML = url;
-  // roomURL.text = url;
 }
 
 /****************************************************************************
@@ -105,45 +96,53 @@ function updateRoomURL(ipaddr) {
 ****************************************************************************/
 
 var mediaSource, mediaBuffer, remoteDestination, mediaDescription;
-
-function handleFileSelect(audio,op,when) {
-
-    if(op){
-        playTon (audio,when)
-    }else{
-        stopTon (audio,when)
-    }
-}
-
 var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-var source;
+var audioFiles = ['do','re','mi','fa','sol','la'];
+var audioSources = [];
 
-function getAudio(audio){
-    source = audioCtx.createBufferSource();
-    var request = new XMLHttpRequest();
-    request.open('GET', 'http://'+serverIp+':3000/'+audio+'.wav', true);
-    request.responseType = 'arraybuffer';
+function getAudioFiles(){
 
-    request.onload = function() {
-    var audioData = request.response;
-
-    audioCtx.decodeAudioData(audioData, function(buffer) {
-        source.buffer = buffer;
-        source.connect(audioCtx.destination);
-        source.loop = true;
-      },
-      function(e){ console.log("Error with decoding audio data" + e.err); });
-  }
-  request.send();
+    for(i = 0; i < 6; i++){
+         audioSources[i] = audioCtx.createBufferSource();
+         var request = new XMLHttpRequest();
+         request.open('GET', 'http://'+serverIp+':3000/'+audioFiles[i]+'.wav', true);
+         request.responseType = 'arraybuffer';
+         request.onload = function() {
+            var audioData = request.response;
+            audioCtx.decodeAudioData(audioData, function(buffer) {
+                audioSources[i].buffer = buffer;
+                audioSources[i].connect(audioCtx.destination);
+                audioSources[i].loop = true;
+            },
+            function(e){ console.log("Error with decoding audio data" + e.err); });
+        }
+        request.send();
+        var percent = (i + 1)*15;
+        console.log(percent+'%');
+    }
+    console.log('Carregamento dos arquivos de audio completado!');
 }
 
-function playTon (audio,when) {                           //start wind audio
-    getAudio(audio);    
-    source.start(when);
+
+function handleFileSelect(notes,op,when) {
+
+    for(i = 0; i < notes.length; i++){
+        if(op){
+            playTon (notes,when)
+        }else{
+            stopTon (notes,when)
+        }
+    } 
 }
 
-function stopTon (audio,when) {                           //stop the wind audio
-    source.stop(audioCtx.currentTime + when);
+function playTon (note,when) {                            
+    var position = audioFiles.indexOf(note);
+    audioSources[position].start(when);
+}
+
+function stopTon (note,when) {                          
+    var position = audioFiles.indexOf(note);
+    audioSources[position].stop(audioCtx.currentTime + when);
 }
 
 
@@ -151,89 +150,157 @@ function stopTon (audio,when) {                           //stop the wind audio
 * WebRTC peer connection and data channel
 ****************************************************************************/
 
+var peerConnInitiator = [];
 var peerConn;
+var peerConnCount = 0;
+var dataChannelInitiator = [];
 var dataChannel;
+var notes = [];
 
 function signalingMessageCallback(message) {
-  if (message.type === 'offer') {
-    console.log('Got offer. Sending answer to peer.');
-    peerConn.setRemoteDescription(new RTCSessionDescription(message), function() {},
-                                  logError);
-    peerConn.createAnswer(onLocalSessionCreated, logError);
 
-  } else if (message.type === 'answer') {
-    console.log('Got answer.');
-    peerConn.setRemoteDescription(new RTCSessionDescription(message), function() {},
-                                  logError);
+    if (message.type === 'offer') {
 
-  } else if (message.type === 'candidate') {
-    peerConn.addIceCandidate(new RTCIceCandidate({
-      candidate: message.candidate
-    }));
+        if(isInitiator){
+            console.log('Oferta Recebida como Inicializador!');
+            peerConnInitiator[peerConnCount].setRemoteDescription(new RTCSessionDescription(message), function() {}, logError);
+            peerConnInitiator[peerConnCount].createAnswer(onLocalSessionCreated, logError);
+        }else{
+            console.log('Oferta Recebida como Peer!');   
+            peerConn.setRemoteDescription(new RTCSessionDescription(message), function() {}, logError);
+            peerConn.createAnswer(onLocalSessionCreated, logError);
+        }
 
-  } else if (message === 'bye') {
-// TODO: cleanup RTC connection?
-}
+    }else if(message.type === 'answer') {
+    
+        if(isInitiator){
+            console.log('Resposta Recebida como Incializador!');
+            peerConnInitiator[peerConnCount].setRemoteDescription(new RTCSessionDescription(message), function() {}, logError);
+        }else{
+            console.log('Resposta Recebida como Peer!');
+            peerConn.setRemoteDescription(new RTCSessionDescription(message), function() {}, logError);
+        }
+
+    }else if(message.type === 'candidate') {
+    
+        if(isInitiator){
+            console.log('Candidato Recebido como Incializador!');
+            peerConnInitiator[peerConnCount].addIceCandidate(new RTCIceCandidate({ candidate: message.candidate}));
+        }else{
+            console.log('Candidato Recebido como Peer!');
+            peerConn.addIceCandidate(new RTCIceCandidate({ candidate: message.candidate}));
+        }
+
+    } else if (message === 'bye') {
+
+    }
 }
 
 function createPeerConnection(isInitiator, config) {
-  console.log('Creating Peer connection as initiator?', isInitiator, 'config:',
-              config);
-     peerConn = new RTCPeerConnection(config);
 
-// send any ice candidates to the other peer
-peerConn.onicecandidate = function(event) {
-  console.log('icecandidate event:', event);
-  if (event.candidate) {
-    sendMessage({
-      type: 'candidate',
-      label: event.candidate.sdpMLineIndex,
-      id: event.candidate.sdpMid,
-      candidate: event.candidate.candidate
-    });
-  } else {
-    console.log('End of candidates.');
-  }
-};
+    if(isInitiator){
 
-if (isInitiator) {
-  console.log('Creating Data Channel');
-  dataChannel = peerConn.createDataChannel('audio');
-  onDataChannelCreated(dataChannel);
+        console.log('PeerConn Count: ' + peerConnCount)
 
-  console.log('Creating an offer');
-  peerConn.createOffer(onLocalSessionCreated, logError);
-} else {
-  peerConn.ondatachannel = function(event) {
-    console.log('ondatachannel:', event.channel);
-    dataChannel = event.channel;
-    onDataChannelCreated(dataChannel);
-  };
-}
+        console.log("Criando conexão P2P do lado Iniciador!");
+        peerConnInitiator[peerConnCount] = new RTCPeerConnection(config);
+
+        peerConnInitiator[peerConnCount].onicecandidate = function(event) {
+            console.log('Evento Candidato ICE - Iniciador:', event);
+            if (event.candidate) {
+                sendMessage({
+                    type: 'candidate',
+                    label: event.candidate.sdpMLineIndex,
+                    id: event.candidate.sdpMid,
+                    candidate: event.candidate.candidate
+                });
+            }else{
+                console.log('Fim dos candidatos');
+            }
+        };
+
+        console.log('Criado canal de dados!');
+        var label = 'audio' + peerConnCount;
+        console.log('Label: ' + label);
+        dataChannelInitiator[peerConnCount] = peerConnInitiator[peerConnCount].createDataChannel(label);  
+        onDataChannelCreated(dataChannelInitiator[peerConnCount]);
+        console.log('Criando uma oferta!');
+        peerConnInitiator[peerConnCount].createOffer(onLocalSessionCreated, logError);
+
+    }else{
+
+        console.log("Criando conexão P2P do lado Peer!");
+        peerConn = new RTCPeerConnection(config);
+
+        peerConn.onicecandidate = function(event) {
+            console.log('Evento Candidato ICE - Peer:', event);
+            if (event.candidate) {
+                sendMessage({
+                    type: 'candidate',
+                    label: event.candidate.sdpMLineIndex,
+                    id: event.candidate.sdpMid,
+                    candidate: event.candidate.candidate
+                });
+            }else{
+                console.log('Fim dos candidatos!');
+            }
+        };
+
+        peerConn.ondatachannel = function(event) {
+            console.log('On DataChannel - Peer:', event.channel);
+            dataChannel = event.channel;
+            onDataChannelCreated(dataChannel);
+        };
+    }
 }
 
 function onLocalSessionCreated(desc) {
-  console.log('local session created:', desc);
-  peerConn.setLocalDescription(desc, function() {
-    console.log('sending local desc:', peerConn.localDescription);
-    sendMessage(peerConn.localDescription);
-  }, logError);
+
+    if(isInitiator){
+        console.log('Criando sessão local como Inicializador: ', desc);
+        peerConnInitiator[peerConnCount].setLocalDescription(desc, function() {
+            console.log('Enviado descritor local como Incializador:', peerConnInitiator[peerConnCount].localDescription);
+            sendMessage(peerConnInitiator[peerConnCount].localDescription);
+        }, logError);  
+    }else{
+        console.log('Criando sessão local como Peer', desc);
+        peerConn.setLocalDescription(desc, function() {
+            console.log('Eviando descritor local como Peer:', peerConn.localDescription);
+            sendMessage(peerConn.localDescription);
+        }, logError);
+    }
+
 }
 
-//var audioCtx2 = new (window.AudioContext || window.webkitAudioContext)();
-//var source2;
 
 function onDataChannelCreated(channel) {
   console.log('onDataChannelCreated:', channel);
 
   channel.onopen = function() {
     console.log('CHANNEL opened!!!');
+    peerConnCount = peerConnCount + 1;
   };
 
   channel.onmessage = function(event){
-    console.log('Received data: ' + event.data);
-	handleFileSelect(event.data,1,0);
-    handleFileSelect(event.data,0,0.5);	      	      
+
+    notes.push(event.data);
+
+    if(isInitiator){
+        console.log('Notas: ' + notes);
+        //for(i = 0; i < peerConnCount, i++){
+        //    dataChannelInitiator[i].send(notes); 
+        //}
+        dataChannelInitiator.every(send(notes));
+    	handleFileSelect(notes,1,0);
+        handleFileSelect(notes,0,0.5);
+        notes.length = 0;	 
+    }else{
+        console.log('Nota: ' + notes);
+        handleFileSelect(notes,1,0);
+        handleFileSelect(notes,0,0.5);
+        notes.length = 0;
+    }
+	      
   }
 }
 
@@ -259,8 +326,10 @@ $(document).ready(function () {
 
     $("#redbox").mouseover(function(){
         $("#redbox").attr("src", "img/mouseover_box.png");
-        handleFileSelect("do",1,0);
-        dataChannel.send("do");
+        var note = [];
+        note.push('do');
+        handleFileSelect(note,1,0);
+        dataChannel.send(note);
     });
     $("#redbox").mouseout(function(){
         $("#redbox").attr("src", "img/red_box.png");
@@ -269,8 +338,10 @@ $(document).ready(function () {
 
     $("#greenbox").mouseover(function(){
         $("#greenbox").attr("src", "img/mouseover_box.png");
-        handleFileSelect("re",1,0);
-        dataChannel.send("re");
+        var note = [];
+        note.push('re');
+        handleFileSelect(note,1,0);
+        dataChannel.send(note);
     });
     $("#greenbox").mouseout(function(){
         $("#greenbox").attr("src", "img/green_box.png");
@@ -279,8 +350,10 @@ $(document).ready(function () {
 
     $("#bluebox").mouseover(function(){
         $("#bluebox").attr("src", "img/mouseover_box.png");
-        handleFileSelect("mi",1,0);
-        dataChannel.send("mi");
+        var note = [];
+        note.push('mi');
+        handleFileSelect(note,1,0);
+        dataChannel.send(note);
     });
     $("#bluebox").mouseout(function(){
         $("#bluebox").attr("src", "img/blue_box.png");
@@ -289,8 +362,10 @@ $(document).ready(function () {
 
     $("#purplebox").mouseover(function(){
         $("#purplebox").attr("src", "img/mouseover_box.png");
-        handleFileSelect("fa",1,0);
-        dataChannel.send("fa");
+        var note = [];
+        note.push('fa');
+        handleFileSelect(note,1,0);
+        dataChannel.send(note);
     });
     $("#purplebox").mouseout(function(){
         $("#purplebox").attr("src", "img/purple_box.png");
@@ -299,8 +374,10 @@ $(document).ready(function () {
 
     $("#yellowbox").mouseover(function(){
         $("#yellowbox").attr("src", "img/mouseover_box.png");
-        handleFileSelect("sol",1,0);
-        dataChannel.send("sol");
+        var note = [];
+        note.push('sol');
+        handleFileSelect(note,1,0);
+        dataChannel.send(note);
     });
     $("#yellowbox").mouseout(function(){
         $("#yellowbox").attr("src", "img/yellow_box.png");
@@ -309,8 +386,10 @@ $(document).ready(function () {
 
     $("#blackbox").mouseover(function(){
         $("#blackbox").attr("src", "img/mouseover_box.png");
-        handleFileSelect("la",1,0);
-        dataChannel.send("la");
+        var note = [];
+        note.push('la');
+        handleFileSelect(note,1,0);
+        dataChannel.send(note);
     });
     $("#blackbox").mouseout(function(){
         $("#blackbox").attr("src", "img/black_box.png");
