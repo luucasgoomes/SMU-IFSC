@@ -15,6 +15,7 @@
   <h1>Realtime communication with WebRTC</h1>
   
   <div id="urlCanvas">
+    <p id="urlText">Copie o link da sala</p>
     <p id="url"></p>
   </div>
 

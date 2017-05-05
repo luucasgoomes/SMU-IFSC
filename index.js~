@@ -29,10 +29,7 @@ var io = socketIO.listen(app);
 
 io.sockets.on('connection', function(socket) {
 
-    socket.on('message', function(data) {
-
-        var message = data.payload;
-        var roomID = data.roomID;
+    socket.on('message', function(message) {
 
         console.log('Message RoomID: ' + roomID);
 
