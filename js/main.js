@@ -1,179 +1,184 @@
 'use strict';
 
 /****************************************************************************
-* Initial setup
+* Configuração Inicial
 ****************************************************************************/
 
-var serverIp = 'localhost';
-
+// Variáveis de Comunicação
 var configuration = {
   'iceServers': [{
     'url': 'stun:stun.l.google.com:19302'
   }]
 };
-
 var roomURL = document.getElementById('url');
-var context = new AudioContext();
 var isInitiator;
+var peerConnInitiator = [];
+var peerConn;
+var peerConnCount = 0;
+var dataChannelInitiator = [];
+var dataChannel;
+var room = window.location.hash.substring(1);
 
+// Variáveis de Mídia
 var mediaSource, mediaBuffer, remoteDestination, mediaDescription;
 var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-var audioFiles = ['do','re','mi','fa','sol','la'];
-var audioSources = [];
-var request = [];
+var audioNames = ['piano-a','piano-b','piano-c','piano-d','piano-e','piano-f','piano-g',
+                  'violino-a','violino-b','violino-c','violino-d','violino-e','violino-f','violino-g',
+                  'flauta-a','flauta-b','flauta-c','flauta-d','flauta-e','flauta-f','flauta-g',
+                  'bateria-a','bateria-b','bateria-c','bateria-d','bateria-e','bateria-f','bateria-g'];
+var audioKeys = ['8','9','3','4','5','6','7',
+                 'i','o','e','r','t','y','u',
+                 'j','k','s','d','f','g','h',
+                 'n','m','z','x','c','v','b' ];
+var audioSource;
+var audioStatus = [];
+var audioData = [];
+var notes = [];
 
-var room = window.location.hash.substring(1);
 if (!room) {
   room = window.location.hash = randomToken();
 }
 
+for (var i = 0; i < audioNames.length; i++) {
+    audioStatus[i] = false;
+}
+
 /****************************************************************************
-* Signaling server
+* Sinalização
 ****************************************************************************/
 
 var socket = io.connect();
 
 socket.on('ipaddr', function(ipaddr) {
-  console.log('Server IP address is: ' + ipaddr);
-  if(isInitiator) updateRoomURL(ipaddr);
+    console.log('INFO: IP do servidor - ' + ipaddr);
+    if(isInitiator) updateRoomURL(ipaddr);
+    getAudioFiles(ipaddr);
+    console.log('INFO: Carregando arquivos completado!');
 });
 
-socket.on('created', function(room, clientId) {
-  console.log('Created room', room, '- my client ID is', clientId);
-  isInitiator = true;
+socket.on('created', function(room, playerID) {
+    console.log('INFO: A sala ' + room + ' foi criada com sucesso!');
+    console.log('INFO: Sou o Iniciador: ' + playerID);
+    isInitiator = true;
+    socket.emit('ipaddr');
 });
 
-socket.on('joined', function(room, clientId) {
-  console.log('This peer has joined room', room, 'with client ID', clientId);
-  isInitiator = false;
-  createPeerConnection(isInitiator, configuration);
+socket.on('joined', function(room, playerID, ipaddr) {
+    console.log('INFO: Entrei na sala: ' + room);
+    console.log('INFO: Sou o jogador: ' + playerID);
+    isInitiator = false;
+    getAudioFiles(ipaddr);
+    createPeerConnection(isInitiator, configuration);
 });
 
 socket.on('full', function(room) {
-  alert('Room ' + room + ' is full. We will create a new room for you.');
-  window.location.hash = '';
-  window.location.reload();
+    alert('INFO: A sala ' + room + ' está cheia. Estou criando uma nova sala para você!');
+    window.location.hash = '';
+    window.location.reload();
 });
 
 socket.on('ready', function() {
-  console.log('Socket is ready');
-  createPeerConnection(isInitiator, configuration);
+    console.log('INFO: Conexão estabelecida!');
+    createPeerConnection(isInitiator, configuration);
 });
 
 socket.on('message', function(message,room) {
-  console.log('Client received message:', message);
-  signalingMessageCallback(message);
+    console.log('INFO: Jogador recebeu a mensagem: ' + message);
+    signalingMessageCallback(message);
 });
 
-
 /****************************************************************************
-* Begin
+* Início
 ****************************************************************************/
-
-console.log('Obtendo os arquivos de áudio...');
-getAudioFiles();
 
 socket.emit('create or join', room);
 
-if (location.hostname.match('localhost')) {
-  socket.emit('ipaddr');
-}
-
-function sendMessage(message) {
-  console.log('Client sending message: ', message);
-  socket.emit('message', { payload: message, roomID: room});
-}
-
-function updateRoomURL(ipaddr) {
-  var url;
-  if (!ipaddr) {
-    url = location.href;
-  } else {
-    url = 'Copie o link para entrar na sala:   ' + location.protocol + '//' + ipaddr + ':8080/#' + room;
-    console.log(url);
-  }
-  roomURL.innerHTML = url;
-}
-
 /****************************************************************************
-* User media 
+* Mídia
 ****************************************************************************/
 
-function getAudioFiles(){
+function getAudioFiles(ipaddr){
 
-    var i = 0;
-    for(var i = 0; i < 6; i++){
+    var request = [];
+    for(var i = 0; i < audioNames.length; i++){
         (function(i) {
-             audioSources[i] = audioCtx.createBufferSource();
              request[i] = new XMLHttpRequest();
-             request[i].open('GET', 'http://'+serverIp+':3000/'+audioFiles[i]+'.wav', true);
+             request[i].open('GET', 'http://'+ipaddr+'/notas/'+audioNames[i]+'.wav', true);
              request[i].responseType = 'arraybuffer';
              request[i].onload = function() {
-                var audioData = request[i].response;
-                audioCtx.decodeAudioData(audioData, function(buffer) {
-                    audioSources[i].buffer = buffer;
-                    audioSources[i].loop = true;
-                    audioSources[i].start();    
-                    console.log('Nota ' + audioFiles[i] + ' carregada!');
-                },
-                function(e){ console.log("Error with decoding audio data" + e.err); });
+                audioData[i] = request[i].response;
             }
             request[i].send();
         })(i);
     }
 }
 
-function handleFileSelect(notes,op,when) {
+function handleAudioSelect(notes) {
 
     for(var i = 0; i < notes.length; i++){
-        if(op){
-            playTon (notes[i],when)
+        var position = audioNames.indexOf(notes[i]);
+        if(!audioStatus[position]){
+            playTon (notes[i]);
+            audioStatus[position] = true;
         }else{
-            stopTon (notes[i],when)
+            stopTon (notes[i]);
+            audioStatus[position] = false;
         }
     } 
 }
 
-function playTon (note,when) {                            
-    var position = audioFiles.indexOf(note);
-    audioSources[position].connect(audioCtx.destination);
+var sources = [];
+var notesPlayed = [];
+
+
+function playTon (note,when) {      
+               
+    console.log('INFO: Executando a nota ' + note);
+       
+    var position = audioNames.indexOf(note);
+    var source = audioCtx.createBufferSource();
+    
+    audioCtx.decodeAudioData(audioData[position], function(buffer) {
+        source.buffer = buffer;
+        source.loop = true;
+        source.connect(audioCtx.destination);
+        source.start(0);   
+    },
+    function(e){ console.log('ERRO: não foi possível a decodificação do áudio: ' + e.err); });
+
+    sources.push(source);
+    notesPlayed.push(note);
+    
 }
 
 function stopTon (note,when) {
 
-    $({to:0}).animate({to:1}, 1000*when, function() {
-        var position = audioFiles.indexOf(note);
-        audioSources[position].disconnect(audioCtx.destination);  
-    })
-
-//    setTimeout(function(){
-//        var position = audioFiles.indexOf(note);
-//        audioSources[position].disconnect(audioCtx.destination);
-//    }, 1000*when);                          
+    console.log('INFO: Parando a nota ' + note);   
+    
+    var position = notesPlayed.indexOf(note);
+    sources[position].stop(0);
+    sources.splice(position,1);
+    notesPlayed.splice(position,1);
+            
 }
 
 
-/****************************************************************************
-* WebRTC peer connection and data channel
-****************************************************************************/
 
-var peerConnInitiator = [];
-var peerConn;
-var peerConnCount = 0;
-var dataChannelInitiator = [];
-var dataChannel;
-var notes = [];
+
+/****************************************************************************
+* WebRTC Peer Connection e Canal de Dados
+****************************************************************************/
 
 function signalingMessageCallback(message) {
 
     if (message.type === 'offer') {
 
         if(isInitiator){
-            console.log('Oferta Recebida como Inicializador!');
+            console.log('INFO: Eu Iniciador recebi uma oferta!');
             peerConnInitiator[peerConnCount].setRemoteDescription(new RTCSessionDescription(message), function() {}, logError);
             peerConnInitiator[peerConnCount].createAnswer(onLocalSessionCreated, logError);
         }else{
-            console.log('Oferta Recebida como Peer!');   
+            console.log('INFO: Eu jogador recebi uma oferta!');   
             peerConn.setRemoteDescription(new RTCSessionDescription(message), function() {}, logError);
             peerConn.createAnswer(onLocalSessionCreated, logError);
         }
@@ -181,25 +186,24 @@ function signalingMessageCallback(message) {
     }else if(message.type === 'answer') {
     
         if(isInitiator){
-            console.log('Resposta Recebida como Incializador!');
+            console.log('INFO: Eu Iniciador recebi uma resposta!');
             peerConnInitiator[peerConnCount].setRemoteDescription(new RTCSessionDescription(message), function() {}, logError);
         }else{
-            console.log('Resposta Recebida como Peer!');
+            console.log('INFO: Eu jogador recebi uma resposta!');
             peerConn.setRemoteDescription(new RTCSessionDescription(message), function() {}, logError);
         }
 
     }else if(message.type === 'candidate') {
     
         if(isInitiator){
-            console.log('Candidato Recebido como Incializador!');
+            console.log('INFO: Eu Iniciador recebi um candidato!');
             peerConnInitiator[peerConnCount].addIceCandidate(new RTCIceCandidate({ candidate: message.candidate}));
         }else{
-            console.log('Candidato Recebido como Peer!');
+            console.log('INFO: Eu jogador recebi um candidato!');
             peerConn.addIceCandidate(new RTCIceCandidate({ candidate: message.candidate}));
         }
 
     } else if (message === 'bye') {
-
     }
 }
 
@@ -207,13 +211,11 @@ function createPeerConnection(isInitiator, config) {
 
     if(isInitiator){
 
-        console.log('PeerConn Count: ' + peerConnCount)
-
-        console.log("Criando conexão P2P do lado Iniciador!");
+        console.log('INFO: Número de conexões com o Iniciador: ' + peerConnCount)
+        console.log('INFO: Estabelecendo conexão do lado Iniciador!');
         peerConnInitiator[peerConnCount] = new RTCPeerConnection(config);
 
         peerConnInitiator[peerConnCount].onicecandidate = function(event) {
-            console.log('Evento Candidato ICE - Iniciador:', event);
             if (event.candidate) {
                 sendMessage({
                     type: 'candidate',
@@ -222,25 +224,22 @@ function createPeerConnection(isInitiator, config) {
                     candidate: event.candidate.candidate
                 });
             }else{
-                console.log('Fim dos candidatos');
+                console.log('INFO: Fim dos candidatos ICE!');
             }
         };
 
-        console.log('Criado canal de dados!');
+        console.log('INFO: Estabelecendo canal de dados!');
         var label = 'audio' + peerConnCount;
-        console.log('Label: ' + label);
         dataChannelInitiator[peerConnCount] = peerConnInitiator[peerConnCount].createDataChannel(label);  
         onDataChannelCreated(dataChannelInitiator[peerConnCount]);
-        console.log('Criando uma oferta!');
         peerConnInitiator[peerConnCount].createOffer(onLocalSessionCreated, logError);
 
     }else{
 
-        console.log("Criando conexão P2P do lado Peer!");
+        console.log('INFO: Estabelecendo conexão do lado Peer!');
         peerConn = new RTCPeerConnection(config);
 
         peerConn.onicecandidate = function(event) {
-            console.log('Evento Candidato ICE - Peer:', event);
             if (event.candidate) {
                 sendMessage({
                     type: 'candidate',
@@ -249,12 +248,11 @@ function createPeerConnection(isInitiator, config) {
                     candidate: event.candidate.candidate
                 });
             }else{
-                console.log('Fim dos candidatos!');
+                console.log('INFO: Fim dos candidatos ICE!');
             }
         };
 
         peerConn.ondatachannel = function(event) {
-            console.log('On DataChannel - Peer:', event.channel);
             dataChannel = event.channel;
             onDataChannelCreated(dataChannel);
         };
@@ -264,15 +262,15 @@ function createPeerConnection(isInitiator, config) {
 function onLocalSessionCreated(desc) {
 
     if(isInitiator){
-        console.log('Criando sessão local como Inicializador: ', desc);
+        console.log('INFO: Criando sessão local como Inicializador: ', desc);
         peerConnInitiator[peerConnCount].setLocalDescription(desc, function() {
-            console.log('Enviado descritor local como Incializador:', peerConnInitiator[peerConnCount].localDescription);
+            console.log('INFO: Enviado descritor local como Incializador:', peerConnInitiator[peerConnCount].localDescription);
             sendMessage(peerConnInitiator[peerConnCount].localDescription);
         }, logError);  
     }else{
-        console.log('Criando sessão local como Peer', desc);
+        console.log('INFO: Criando sessão local como Peer', desc);
         peerConn.setLocalDescription(desc, function() {
-            console.log('Eviando descritor local como Peer:', peerConn.localDescription);
+            console.log('INFO: Eviando descritor local como Peer:', peerConn.localDescription);
             sendMessage(peerConn.localDescription);
         }, logError);
     }
@@ -281,50 +279,61 @@ function onLocalSessionCreated(desc) {
 
 
 function onDataChannelCreated(channel) {
-  console.log('onDataChannelCreated:', channel);
 
-  channel.onopen = function() {
-    console.log('CHANNEL opened!!!');
-    peerConnCount = peerConnCount + 1;
-  };
+    channel.onopen = function() {
+        console.log('INFO: Canal de dados estabelecido com sucesso!');
+        peerConnCount = peerConnCount + 1;
+    };
 
-  channel.onmessage = function(event){
-
-    notes.push(event.data);
-
-    if(isInitiator){
-        console.log('Notas: ' + notes);
-        sendNote(notes);
-    	handleFileSelect(notes,1,0);
-        handleFileSelect(notes,0,0.49);
-        notes.length = 0;	 
-    }else{
-        console.log('Nota: ' + notes);
-        handleFileSelect(notes,1,0);
-        handleFileSelect(notes,0,0.49);
-        notes.length = 0;
+    channel.onmessage = function(event){
+        notes.push(event.data);
+        if(isInitiator){
+            sendNote(notes);
+        	handleAudioSelect(notes);
+            notes.length = 0;	 
+        }else{
+            handleAudioSelect(notes);
+            notes.length = 0;
+        }	      
     }
-	      
-  }
 }
 
 /****************************************************************************
-* Aux functions, mostly UI-related
+* Funções Auxiliares
 ****************************************************************************/
 
 function randomToken() {
-  return Math.floor((1 + Math.random()) * 1e16).toString(16).substring(1);
+    return Math.floor((1 + Math.random()) * 1e16).toString(16).substring(1);
 }
 
 function logError(err) {
-  console.log(err.toString(), err);
+    console.log(err.toString(), err);
 }
+
+function sendMessage(message) {
+    console.log('INFO: Jogador enviado a mensagem: ', message);
+    socket.emit('message', { payload: message, roomID: room});
+}
+
+function updateRoomURL(ipaddr) {
+    var url;
+    if (!ipaddr) {
+        url = location.href;
+    } else {
+        url = location.protocol + '//' + ipaddr + '/#' + room;
+    }
+    roomURL.innerHTML = url;
+}
+
+/****************************************************************************
+* Button Fuctions
+****************************************************************************/
 
 function sendNote(note){
     if(isInitiator){
         if(dataChannelInitiator.length > 0){
             for(var i = 0; i < dataChannelInitiator.length; i++){
-                dataChannelInitiator[i].send(note);
+                if(dataChannelInitiator[i].readyState !== "closed") dataChannelInitiator[i].send(note);
             }
         }   
     }else{
@@ -332,122 +341,82 @@ function sendNote(note){
     }
 }
 
-/****************************************************************************
-* Button Fuctions
-****************************************************************************/
+function mouseAction(noteText){
+    var n = [];
+    n.push(noteText);
+    if(isInitiator) handleAudioSelect(n);
+    sendNote(n);
+}
 
 $(document).ready(function () {
-
-    $("#redbox").mouseover(function(){
-        $("#redbox").attr("src", "img/mouseover_box.png");
-        var note = [];
-        note.push('do');
-        if(isInitiator){
-             handleFileSelect(note,1,0);
-             handleFileSelect(note,0,0.60);
+    $(".nota").hover(	
+        function () {
+            $(this).attr("src", "img/" + this.id[this.id.length-1] + "_on.png");
+            mouseAction(this.id);
+        }, 
+        function () {
+            $(this).attr("src", "img/" + this.id[this.id.length-1] + "_off.png");
+            mouseAction(this.id);
         }
-        sendNote(note);
-    });
-    $("#redbox").mouseout(function(){
-        $("#redbox").attr("src", "img/red_box.png");
-//        var note = [];
-//        note.push('do');        
-//        if(isInitiator) handleFileSelect(note,0,0);
-    });
-
-    $("#greenbox").mouseover(function(){
-        $("#greenbox").attr("src", "img/mouseover_box.png");
-        var note = [];
-        note.push('re');
-        if(isInitiator){
-             handleFileSelect(note,1,0);
-             handleFileSelect(note,0,0.60);
-        }
-        sendNote(note);
-    });
-    $("#greenbox").mouseout(function(){
-        $("#greenbox").attr("src", "img/green_box.png");
-//        var note = [];
-//        note.push('re');        
-//        if(isInitiator) handleFileSelect(note,0,0);
-    });
-
-
-    $("#bluebox").mouseover(function(){
-        $("#bluebox").attr("src", "img/mouseover_box.png");
-        var note = [];
-        note.push('mi');
-        if(isInitiator){
-             handleFileSelect(note,1,0);
-             handleFileSelect(note,0,0.60);
-        }
-        sendNote(note);
-    });
-    $("#bluebox").mouseout(function(){
-        $("#bluebox").attr("src", "img/blue_box.png");
-//        var note = [];
-//        note.push('mi');        
-//        if(isInitiator) handleFileSelect(note,0,0);
-    });
-
-
-    $("#purplebox").mouseover(function(){
-        $("#purplebox").attr("src", "img/mouseover_box.png");
-        var note = [];
-        note.push('fa');
-        if(isInitiator){
-             handleFileSelect(note,1,0);
-             handleFileSelect(note,0,0.60);
-        }
-        sendNote(note);
-    });
-
-    $("#purplebox").mouseout(function(){
-        $("#purplebox").attr("src", "img/purple_box.png");
-//        var note = [];
-//        note.push('fa');        
-//        if(isInitiator) handleFileSelect(note,0,0);
-    });
-
-
-    $("#yellowbox").mouseover(function(){
-        $("#yellowbox").attr("src", "img/mouseover_box.png");
-        var note = [];
-        note.push('sol');
-        if(isInitiator){
-             handleFileSelect(note,1,0);
-             handleFileSelect(note,0,0.60);
-        }
-        sendNote(note);
-    });
-
-    $("#yellowbox").mouseout(function(){
-        $("#yellowbox").attr("src", "img/yellow_box.png");
-//        var note = [];
-//        note.push('sol');        
-//        if(isInitiator) handleFileSelect(note,0,0);    
-    });
-
-    $("#blackbox").mouseover(function(){
-        $("#blackbox").attr("src", "img/mouseover_box.png");
-        var note = [];
-        note.push('la');
-        if(isInitiator){
-             handleFileSelect(note,1,0);
-             handleFileSelect(note,0,0.60);
-        }
-        sendNote(note);
-    });
-
-    $("#blackbox").mouseout(function(){
-        $("#blackbox").attr("src", "img/black_box.png");
-//        var note = [];
-//        note.push('la');        
-//        if(isInitiator) handleFileSelect(note,0,0);
-    });
-
-
+    );
 });
+
+
+var keyAllowed = {};
+
+$(document).keydown(function(e) {
+    if (keyAllowed [e.which] === false) return;
+    keyAllowed [e.which] = false;
+    e = e || window.event;
+    var charCode = e.keyCode || e.which;
+    var charStr = String.fromCharCode(charCode).toLowerCase();
+    var position = audioKeys.indexOf(charStr);
+    var audioName = audioNames[position];
+    if(audioName !== undefined){
+        $('#'+audioName).attr("src", "img/" + audioName[audioName.length-1] + "_on.png");
+        mouseAction(audioName)
+    }
+});
+
+$(document).keyup(function(e) { 
+    keyAllowed [e.which] = true;
+    e = e || window.event;
+    var charCode = e.keyCode || e.which;
+    var charStr = String.fromCharCode(charCode).toLowerCase();
+    var position = audioKeys.indexOf(charStr);
+    var audioName = audioNames[position];
+    if(audioName !== undefined){
+        $('#'+audioName).attr("src", "img/" + audioName[audioName.length-1] + "_off.png");
+        mouseAction(audioName)
+    }
+});
+
+
+/*
+document.onkeypress = function(evt) {
+    evt = evt || window.event;
+    var charCode = evt.keyCode || evt.which;
+    var charStr = String.fromCharCode(charCode);
+    var position = audioKeys.indexOf(charStr);
+    console.log(charCode);
+    console.log(charStr);
+    console.log(position);
+    console.log(audioNames[position]);
+    var audioName = audioNames[position];
+    $('#'+audioName).attr("src", "img/" + audioName[audioName.length-1] + "_on.png");
+    mouseAction(audioName);
+};
+
+document.onkeyup = function(evt) {
+    evt = evt || window.event;
+    var charCode = evt.keyCode || evt.which;
+    var charStr = String.fromCharCode(charCode).toLowerCase();
+    var position = audioKeys.indexOf(charStr);
+    var audioName = audioNames[position];
+    $('#'+audioName).attr("src", "img/" + audioName[audioName.length-1] + "_off.png");
+    mouseAction(audioName);
+};
+*/
 
 
 
