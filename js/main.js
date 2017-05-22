@@ -8,7 +8,8 @@
 var configuration = {
   'iceServers': [{
     'url': 'stun:stun.l.google.com:19302'
-  }]
+  }],
+   optional: [{ googDscp: true }]
 };
 var roomURL = document.getElementById('url');
 var isInitiator;
@@ -311,7 +312,7 @@ function logError(err) {
 }
 
 function sendMessage(message) {
-    console.log('INFO: Jogador enviado a mensagem: ', message);
+    console.log('INFO: Jogador enviando a mensagem: ', message);
     socket.emit('message', { payload: message, roomID: room});
 }
 

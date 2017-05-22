@@ -26,7 +26,13 @@ var numClients;
 var fileServer = new(nodeStatic.Server)();
 var app = http.createServer(function(req, res) {
   fileServer.serve(req, res);
-}).listen(8080,ip.address());
+});
+
+app.on('listening',function(){
+    console.log('ok, server is running');
+});
+
+app.listen(56890,ip.address());
 
 /*--------------------------Arquivos de Áudio-------------------------*/
 
