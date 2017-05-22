@@ -114,57 +114,66 @@ function getAudioFiles(ipaddr){
     }
 }
 
-function handleAudioSelect(notes) {
+function handleAudioSelect(note) {
 
-    for(var i = 0; i < notes.length; i++){
-        var position = audioNames.indexOf(notes[i]);
-        if(!audioStatus[position]){
-            playTon (notes[i]);
-            audioStatus[position] = true;
-        }else{
-            stopTon (notes[i]);
-            audioStatus[position] = false;
-        }
-    } 
+    var position = audioNames.indexOf(note);
+    if(!audioStatus[position]){
+        playTon (note);
+    }else{
+        stopTon (note);
+    }
 }
 
 var sources = [];
 var notesPlayed = [];
 
-
-function playTon (note,when) {      
-               
-    console.log('INFO: Executando a nota ' + note);
-       
+function playTon (note) {      
+              
+    console.log('Nota:' + note);
     var position = audioNames.indexOf(note);
+    console.log('Position: ' + position);
+    console.log(audioStatus[position]); 
+
+    if(audioStatus[position]) return;
+
+    console.log('INFO: Executando a nota ' + note);
+
     var source = audioCtx.createBufferSource();
-    
     audioCtx.decodeAudioData(audioData[position], function(buffer) {
         source.buffer = buffer;
         source.loop = true;
         source.connect(audioCtx.destination);
         source.start(0);   
+        console.log('Position ajsdfh: ' + position);
+        console.log(audioStatus); 
+        audioStatus[position] = 1;
     },
     function(e){ console.log('ERRO: não foi possível a decodificação do áudio: ' + e.err); });
-
+    
+    console.log(audioStatus[position]); 
     sources.push(source);
     notesPlayed.push(note);
     
 }
 
-function stopTon (note,when) {
+function stopTon (note) {
 
-    console.log('INFO: Parando a nota ' + note);   
+    var position = notesPlayed.indexOf(note); 
+
+    console.log(audioStatus[position]);  
+
+    if(!audioStatus[position]) return;
     
-    var position = notesPlayed.indexOf(note);
+    console.log('INFO: Parando a nota ' + note);  
+    
     sources[position].stop(0);
+    audioStatus[position] = false;
     sources.splice(position,1);
     notesPlayed.splice(position,1);
+
+    console.log(audioStatus[position]); 
             
 }
-
-
-
 
 /****************************************************************************
 * WebRTC Peer Connection e Canal de Dados
@@ -287,14 +296,11 @@ function onDataChannelCreated(channel) {
     };
 
     channel.onmessage = function(event){
-        notes.push(event.data);
         if(isInitiator){
-            sendNote(notes);
-        	handleAudioSelect(notes);
-            notes.length = 0;	 
+            sendNote(event.data);
+        	handleAudioSelect(event.data);	 
         }else{
-            handleAudioSelect(notes);
-            notes.length = 0;
+            handleAudioSelect(event.data);
         }	      
     }
 }
@@ -342,11 +348,9 @@ function sendNote(note){
     }
 }
 
-function mouseAction(noteText){
-    var n = [];
-    n.push(noteText);
-    if(isInitiator) handleAudioSelect(n);
-    sendNote(n);
+function mouseAction(note){
+    if(isInitiator) handleAudioSelect(note);
+    sendNote(note);
 }
 
 $(document).ready(function () {
@@ -393,31 +397,6 @@ $(document).keyup(function(e) {
 });
 
 
-/*
-document.onkeypress = function(evt) {
-    evt = evt || window.event;
-    var charCode = evt.keyCode || evt.which;
-    var charStr = String.fromCharCode(charCode);
-    var position = audioKeys.indexOf(charStr);
-    console.log(charCode);
-    console.log(charStr);
-    console.log(position);
-    console.log(audioNames[position]);
-    var audioName = audioNames[position];
-    $('#'+audioName).attr("src", "img/" + audioName[audioName.length-1] + "_on.png");
-    mouseAction(audioName);
-};
-
-document.onkeyup = function(evt) {
-    evt = evt || window.event;
-    var charCode = evt.keyCode || evt.which;
-    var charStr = String.fromCharCode(charCode).toLowerCase();
-    var position = audioKeys.indexOf(charStr);
-    var audioName = audioNames[position];
-    $('#'+audioName).attr("src", "img/" + audioName[audioName.length-1] + "_off.png");
-    mouseAction(audioName);
-};
-*/
 
 
 
