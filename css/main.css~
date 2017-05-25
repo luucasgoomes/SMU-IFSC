@@ -26,12 +26,28 @@ input {
   width:60px;
   height:60px;
   margin-bottom:20px;
+  margin-left:20px;
 }
 
 #url {
-  margin-bottom:50px
+  margin-bottom:50px;
 }
 
+.piano{
+    opacity:0.3;
+}
+
+.violino{
+    opacity:0.3;
+}
+
+.flauta{
+    opacity:0.3;
+}
+
+.bateria{
+    opacity:0.3;
+}
 
 
 

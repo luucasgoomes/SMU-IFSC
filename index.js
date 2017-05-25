@@ -26,18 +26,17 @@ var numClients;
 var fileServer = new(nodeStatic.Server)();
 var app = http.createServer(function(req, res) {
   fileServer.serve(req, res);
-}).listen(8080,ip.address());
+}).listen(8080,'::');
 
 /*--------------------------Arquivos de Áudio-------------------------*/
 
 var express = require('express')
 var app2 = express()
-app2.listen(3000,ip.address(), function () {
+app2.listen(3000,'::', function () {
   console.log('INFO: Arquivos Ok!');
 })
 app2.use(express.static('public'),cors)
 
-console.log('INFO: IP de serviço - ' + ip.address());
 /*-------------------------------Conexão-----------------------------*/
 
 var io = socketIO.listen(app);
@@ -45,6 +44,8 @@ var io = socketIO.listen(app);
 io.sockets.on('connection', function(socket) {
 
 // Mensagens utilizadas para sinalização entre Iniciador e Peers. 
+    
+    console.log('Connection!');
 
     socket.on('message', function(data) {
 
@@ -112,6 +113,25 @@ io.sockets.on('connection', function(socket) {
         console.log('received bye');
     });
 
+    socket.on('instrument', function(data){
+
+        var instrument = data.instrument;
+        var roomID = data.roomID;
+        var room = foundRoom(roomID);      
+        
+        if(!room.isInstrumentSelected(instrument)){
+            console.log('INFO: Instrumento ' + instrument + ' disponível!');
+            room.selectInstrument(instrument, socket.id);
+            socket.emit('instrument',{'instrument':instrument,'chosen':false});
+        }else{
+            console.log('INFO: Instrumento ' + instrument + ' já selecionado!');
+            room.deselectInstrument(socket.id);
+            socket.emit('instrument',{'instrument':instrument,'chosen':true});
+        }   
+    });
+
+
+
 });
 
 /*---------------------------Funções e Objetos-----------------------------*/
@@ -125,6 +145,11 @@ var Room = function(id){
     this.id = id;
     this.clientsList = [];
     this.nClients = 0;
+    this.instruments = {};
+    this.instruments["piano"] = null;
+    this.instruments["violino"] = null;
+    this.instruments["flauta"] = null;
+    this.instruments["bateria"] = null;
 
     this.getRoomID = function(){
         return this.id;
@@ -145,6 +170,24 @@ var Room = function(id){
     this.nClientsIncrement = function(){
        this.nClients++;
     }
+
+    this.isInstrumentSelected = function(instrument){
+        if(this.instruments[instrument]  != null) return true;
+        return false;
+    }
+
+    this.selectInstrument = function(instrument,  clientID){
+        this.deselectInstrument(clientID);
+        this.instruments[instrument] = clientID;
+    }
+
+    this.deselectInstrument = function(clientID){
+        for (var key in this.instruments){
+            if(this.instruments[key] == clientID) this.instruments[key] = null; 
+        }
+    }
+
+    
 };
 
 /*

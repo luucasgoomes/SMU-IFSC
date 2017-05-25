@@ -18,6 +18,12 @@ var peerConnCount = 0;
 var dataChannelInitiator = [];
 var dataChannel;
 var room = window.location.hash.substring(1);
+var keyEnable = {
+    'piano':false,
+    'violino':false,
+    'flauta':false,
+    'bateria':false
+}
 
 // Variáveis de Mídia
 var mediaSource, mediaBuffer, remoteDestination, mediaDescription;
@@ -87,6 +93,28 @@ socket.on('message', function(message,room) {
     signalingMessageCallback(message);
 });
 
+socket.on('instrument', function(data) {
+
+    var instrument = data.instrument;
+    var chosen= data.chosen;
+
+    console.log('INFO: Jogador selecionou o instrumento:' + instrument);
+    if(!chosen){
+        for (var key in keyEnable){
+            keyEnable[key] = false;
+        }
+        $('.nota').prop("disabled", true);
+        $('.nota').css('opacity','0.3');
+        keyEnable[instrument] = true;
+        $('.'+instrument).prop("disabled", false);
+        $('.'+instrument).css('opacity','1');
+    }else{
+        keyEnable[instrument] = false;
+        $('.'+instrument).prop("disabled", true);
+        $('.'+instrument).css('opacity','0.3');
+    }
+});
+
 /****************************************************************************
 * Início
 ****************************************************************************/
@@ -128,10 +156,7 @@ var notesPlayed = [];
 
 function playTon (note) {      
               
-    console.log('Nota:' + note);
     var position = audioNames.indexOf(note);
-    console.log('Position: ' + position);
-    console.log(audioStatus[position]); 
 
     if(audioStatus[position]) return;
 
@@ -143,13 +168,10 @@ function playTon (note) {
         source.loop = true;
         source.connect(audioCtx.destination);
         source.start(0);   
-        console.log('Position ajsdfh: ' + position);
-        console.log(audioStatus); 
-        audioStatus[position] = 1;
+        audioStatus[position] = 1; 
     },
     function(e){ console.log('ERRO: não foi possível a decodificação do áudio: ' + e.err); });
     
-    console.log(audioStatus[position]); 
     sources.push(source);
     notesPlayed.push(note);
     
@@ -157,20 +179,17 @@ function playTon (note) {
 
 function stopTon (note) {
 
-    var position = notesPlayed.indexOf(note); 
+    var positionSource = notesPlayed.indexOf(note); 
+    var positionNote = audioNames.indexOf(note);
 
-    console.log(audioStatus[position]);  
-
-    if(!audioStatus[position]) return;
+    if(!audioStatus[positionNote]) return;
     
     console.log('INFO: Parando a nota ' + note);  
     
-    sources[position].stop(0);
-    audioStatus[position] = false;
-    sources.splice(position,1);
-    notesPlayed.splice(position,1);
-
-    console.log(audioStatus[position]); 
+    sources[positionSource].stop(0);
+    audioStatus[positionNote] = false;
+    sources.splice(positionSource,1);
+    notesPlayed.splice(positionSource,1);
             
 }
 
@@ -353,12 +372,31 @@ function mouseAction(note){
 }
 
 $(document).ready(function () {
+
+    $('#piano').click(function(){
+        socket.emit('instrument', { instrument: 'piano', roomID: room});       
+    });
+
+    $('#violino').click(function(){
+        socket.emit('instrument', { instrument: 'violino', roomID: room});
+    });
+
+    $('#flauta').click(function(){
+        socket.emit('instrument', { instrument: 'flauta', roomID: room});
+    });
+
+    $('#bateria').click(function(){
+        socket.emit('instrument', { instrument: 'bateria', roomID: room});
+    });
+
     $(".nota").hover(	
         function () {
+            if (!keyEnable[this.id.slice(0,-2)]) return;
             $(this).attr("src", "img/" + this.id[this.id.length-1] + "_on.png");
             mouseAction(this.id);
         }, 
         function () {
+            if (!keyEnable[this.id.slice(0,-2)]) return;
             $(this).attr("src", "img/" + this.id[this.id.length-1] + "_off.png");
             mouseAction(this.id);
         }
@@ -375,10 +413,13 @@ $(document).keydown(function(e) {
     var charCode = e.keyCode || e.which;
     var charStr = String.fromCharCode(charCode).toLowerCase();
     var position = audioKeys.indexOf(charStr);
-    var audioName = audioNames[position];
-    if(audioName !== undefined){
-        $('#'+audioName).attr("src", "img/" + audioName[audioName.length-1] + "_on.png");
-        mouseAction(audioName)
+    if(position >= 0){
+        var audioName = audioNames[position];
+        if (!keyEnable[audioName.slice(0,-2)]) return;
+        if(audioName !== undefined){
+            $('#'+audioName).attr("src", "img/" + audioName[audioName.length-1] + "_on.png");
+            mouseAction(audioName)
+        }
     }
 });
 
@@ -388,10 +429,13 @@ $(document).keyup(function(e) {
     var charCode = e.keyCode || e.which;
     var charStr = String.fromCharCode(charCode).toLowerCase();
     var position = audioKeys.indexOf(charStr);
-    var audioName = audioNames[position];
-    if(audioName !== undefined){
-        $('#'+audioName).attr("src", "img/" + audioName[audioName.length-1] + "_off.png");
-        mouseAction(audioName)
+    if(position >= 0){
+        var audioName = audioNames[position];
+        if (!keyEnable[audioName.slice(0,-2)]) return;
+        if(audioName !== undefined){
+            $('#'+audioName).attr("src", "img/" + audioName[audioName.length-1] + "_off.png");
+            mouseAction(audioName)
+        }
     }
 });
 

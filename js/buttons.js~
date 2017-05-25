@@ -1,0 +1,44 @@
+'use strict';
+
+/****************************************************************************
+* Sinalização
+****************************************************************************/
+
+var socket = io.connect();
+
+socket.on('instrument', function(instrument) {
+    console.log('Seu instrumento é:' + instrument)
+});
+
+/****************************************************************************
+* Início
+****************************************************************************/
+$(document).ready(function () {
+    $('#piano').click(function(){
+        console.log('O piano foi escolhido!');
+        socket.emit('intrument','piano');
+    }); 
+    $('#violino').click(function(){
+        console.log('O violino foi escolhido!');
+        socket.emit('intrument','violino');
+    }); 
+    $('#flauta').click(function(){
+        console.log('intrument','flauta');
+    }); 
+    $('#bateria').click(function(){
+        console.log('intrument','bateria');
+    }); 
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
