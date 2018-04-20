@@ -1,5 +1,3 @@
-# SMU-IFSC
-
 Para rodar o código:
 
 Configurar o Nginx conforme arquivo "default".
